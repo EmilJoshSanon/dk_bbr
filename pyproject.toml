@@ -7,13 +7,23 @@ readme = "README.md"
 
 [tool.poetry.dependencies]
 python = "^3.10"
-psycopg = "^3.2.9"
 ijson = "^3.4.0"
 pyspark = "^3.5.5"
+psycopg = {extras = ["binary"], version = "^3.2.9"}
+shapely = "^2.1.1"
+pydantic = "^2.11.5"
+python-dotenv = "^1.1.0"
+uvicorn = "^0.34.2"
+fastapi = {extras = ["standard"], version = "^0.115.12"}
 
 
 [tool.poetry.group.dev.dependencies]
 ipykernel = "^6.29.5"
+
+[tool.poetry.group.test.dependencies]
+httpx = "^0.28.1"
+mypy = "^1.15.0"
+pytest = "^8.3.5"
 
 [build-system]
 requires = ["poetry-core"]
