@@ -4,17 +4,7 @@ import re
 import shapely
 
 from datetime import datetime
-from pyspark.sql import SparkSession
-from typing import Any
 from uuid import UUID
-
-
-def generate_schema(json_file_path: str) -> dict[str, Any]:
-    spark = SparkSession.builder.appName("JSONSchemaInference").getOrCreate()
-    df = spark.read.json(json_file_path, multiLine=True)
-    schema = df.schema.json()
-    spark.stop()
-    return json.loads(schema)
 
 
 def is_int(string: str) -> bool:

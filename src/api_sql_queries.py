@@ -1,9 +1,7 @@
-# Packages
-
+# Packages import
 from psycopg import connect
 
-# Modules
-
+# Modules import
 from src.env import POSTGRES_CONNECTION_STRING
 from src.type_models import BygningQuery, BygningResponse
 
