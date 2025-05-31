@@ -52,12 +52,11 @@ def map_schema(file_path: str) -> dict[str, DbSchema]:
         for prefix, event, value in parser:
             # Look for 'map_key' events at the top level (prefix is empty)
             if event == "map_key" and prefix == "":
-                if current_object_mapped:
-                    if searched_rows < 1000:
-                        for dt in data_types:
-                            saved_schema[current_object].columns[dt].db_type = set_type(
-                                data_types[dt]
-                            )
+                if current_object is not None:
+                    for dt in data_types:
+                        saved_schema[current_object].columns[dt].db_type = set_type(
+                            data_types[dt]
+                        )
                 if value not in saved_schema:
                     current_object = value
                     saved_schema[value] = DbSchema(
@@ -85,11 +84,10 @@ def map_schema(file_path: str) -> dict[str, DbSchema]:
                             data_types[value] = []
                     last_key = value
                 elif event in ("string", "number", "boolean"):
-                    data_types[last_key].append(get_type(str(value)))
-                    if searched_rows == 1000:
-                        for dt in data_types:
-                            saved_schema[current_object].columns[dt].db_type = set_type(
-                                data_types[dt]
-                            )
+                    if searched_rows < 1000:
+                        data_types[last_key].append(get_type(str(value)))
+                    else:
                         current_object_mapped = True
+        for dt in data_types:
+            saved_schema[current_object].columns[dt].db_type = set_type(data_types[dt])
     return saved_schema

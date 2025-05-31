@@ -1,4 +1,5 @@
 # Packages import
+import hashlib
 import ijson
 
 from psycopg import Connection, connect
@@ -8,6 +9,11 @@ from typing import Any
 # Modules import
 from src.type_models import DbSchema
 from src.env import POSTGRES_CONNECTION_STRING
+
+# Terminal font colors
+RED = "\033[31m"  # Red text
+GREEN = "\033[32m"  # Green text
+RESET = "\033[0m"  # Reset to default color
 
 
 def upload_data(
@@ -54,10 +60,13 @@ def upsert_data(
                 SELECT {id}, {select_columns}, {mutable}
                 FROM upload.{table}
                 ON CONFLICT (id) 
-                DO UPDATE SET 
-                    {', '.join([c + ' = EXCLUDED.' + c for c in columns])},
-                    mutable = EXCLUDED.mutable,
-                    updated_at = NOW();
+                DO 
+                    UPDATE SET 
+                        {', '.join([c + ' = EXCLUDED.' + c for c in columns])},
+                        mutable = EXCLUDED.mutable,
+                        updated_at = NOW()
+                    WHERE
+                        api_exposed.{table}.mutable <> EXCLUDED.mutable;
             """
             with cnx.cursor() as cur:
                 cur.execute(query)
@@ -93,7 +102,71 @@ def check_upload_and_file_data_match(
                     for row in stream_cur:
                         db_md5_hash.update(str(row).encode("utf-8"))
             if md5_hash.hexdigest() == db_md5_hash.hexdigest():
-                print(f"{t} match between file and upload table OK!")
+                print(f"{t} match between file and upload table {GREEN}OK{RESET}!")
             else:
-                print(f"{t} mismatch between file and upload table ERROR!")
+                print(f"{t} mismatch between file and upload table {RED}ERROR{RESET}!")
+                exit()
+
+
+def check_upload_and_api_exposed_data_match(
+    saved_schema: dict[str, DbSchema], cnx: Connection[tuple[Any, ...]]
+) -> None:
+    for t in saved_schema:
+        if saved_schema[t].columns != {}:
+            columns = saved_schema[t].columns
+            with cnx.cursor() as cur:
+                hash_columns_str = ", ".join(
+                    [
+                        "COALESCE(" + columns[c].db_column_name + "::text, '')"
+                        for c in columns
+                    ]
+                )
+                cur.execute(
+                    f"""
+                    SELECT MD5(STRING_AGG(ROW_TO_JSON(t)::TEXT, '')) AS checksum
+                    from (
+                        select 
+                            {hash_columns_str}
+                        from api_exposed.{saved_schema[t].db_table_name} b 
+                        order by 
+                            b.id_lokal_id, 
+                            b.virkning_fra, 
+                            b.registrering_fra
+                    ) t;
+                """
+                )
+                api_table_md5_hash = cur.fetchone()[0]
+                hash_columns_str = ", ".join(
+                    [
+                        "COALESCE("
+                        + columns[c].db_column_name
+                        + "::"
+                        + columns[c].db_type
+                        + "::TEXT, '')"
+                        for c in columns
+                    ]
+                )
+                cur.execute(
+                    f"""
+                    SELECT MD5(STRING_AGG(ROW_TO_JSON(t)::TEXT, '')) AS checksum
+                    from (
+                        select 
+                            {hash_columns_str}
+                        from upload.{saved_schema[t].db_table_name} b 
+                        order by 
+                            b.id_lokal_id::UUID, 
+                            b.virkning_fra::TIMESTAMPTZ, 
+                            b.registrering_fra::TIMESTAMPTZ
+                    ) t;
+                """
+                )
+                upload_table_md5_hash = cur.fetchone()[0]
+            if api_table_md5_hash == upload_table_md5_hash:
+                print(
+                    f"{saved_schema[t].db_table_name} match between upload and api_exposed table {GREEN}OK{RESET}!"
+                )
+            else:
+                print(
+                    f"{saved_schema[t].db_table_name} mismatch between upload and api_exposed table {RED}ERROR{RESET}!"
+                )
                 exit()

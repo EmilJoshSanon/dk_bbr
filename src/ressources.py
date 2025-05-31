@@ -34,8 +34,11 @@ def is_uuid(string: str):
 
 def check_date(string: str, date_formats: list[str] | None = None) -> bool:
     try:
-        datetime.fromisoformat(string)
-        return True, "TIMESTAMP"
+        dt = datetime.fromisoformat(string)
+        if dt.tzinfo is None:
+            return True, "TIMESTAMP"
+        else:
+            return True, "TIMESTAMPTZ"
     except ValueError:
         pass
     try:
@@ -122,6 +125,8 @@ def set_type(data_types: list[str]) -> str:
         return "GEOMETRY(POINT)"
     elif "GEOMETRY" in data_types:
         return "GEOMETRY"
+    elif "TIMESTAMPTZ" in data_types:
+        return "TIMESTAMPTZ"
     elif "TIMESTAMP" in data_types:
         return "TIMESTAMP"
     elif "DATE" in data_types:

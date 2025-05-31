@@ -24,9 +24,6 @@ httpx = "^0.28.1"
 mypy = "^1.15.0"
 pytest = "^8.3.5"
 
-[tool.poetry.scripts]
-data-main = "python src/data_main.py"
-
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
