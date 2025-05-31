@@ -9,11 +9,17 @@ from src.data_load import (
     upsert_data,
     check_upload_and_file_data_match,
     check_upload_and_api_exposed_data_match,
+    cleanup,
 )
+from src.ressources import unzip_data_file
 
 if __name__ == "__main__":
     cnx = connect(POSTGRES_CONNECTION_STRING)
+    zip_path = "data/BBR_Totaludtraek_DeltaDaily_JSON_HF_20250521080209.zip"
     file_path = "data/BBR_Totaludtraek_DeltaDaily_JSON_HF_20250521080209.json"
+    print("Unzipping data file...")
+    unzip_data_file(zip_path)
+    print("Data file unzipped.")
     print("Mapping schema...")
     saved_schema = map_schema(file_path)
     print("Schema mapped.")
@@ -32,4 +38,7 @@ if __name__ == "__main__":
     print("Comparing hashsum of staging and api_exposed data...")
     check_upload_and_api_exposed_data_match(saved_schema, cnx)
     print("Data match between staging and api_exposed data checked.")
+    print("Cleaning up...")
+    cleanup(cnx, file_path)
+    print("Cleanup completed.")
     cnx.close()

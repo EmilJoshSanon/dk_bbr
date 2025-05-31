@@ -2,6 +2,7 @@
 import json
 import re
 import shapely
+import zipfile
 
 from datetime import datetime
 from uuid import UUID
@@ -161,3 +162,8 @@ def sqlify_names(s: str) -> str:
             sql_str += utf_8_str
         else:
             sql_str += utf_8_str
+
+
+def unzip_data_file(file_path: str) -> None:
+    with zipfile.ZipFile(file_path, "r") as zip_ref:
+        zip_ref.extractall("data")

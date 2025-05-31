@@ -1,6 +1,7 @@
 # Packages import
 import hashlib
 import ijson
+import os
 
 from psycopg import Connection, connect
 from typing import Any
@@ -170,3 +171,20 @@ def check_upload_and_api_exposed_data_match(
                     f"{saved_schema[t].db_table_name} mismatch between upload and api_exposed table {RED}ERROR{RESET}!"
                 )
                 exit()
+
+
+def cleanup(cnx: Connection[tuple[Any, ...]], file_path: str) -> None:
+    with cnx.cursor() as cur:
+        cur.execute(
+            """
+            SELECT table_name
+            FROM information_schema.tables
+            WHERE table_schema = 'upload'
+            AND table_type = 'BASE TABLE';
+        """
+        )
+        tables = cur.fetchall()
+        for table in tables:
+            cur.execute(f"TRUNCATE TABLE upload.{table[0]} RESTART IDENTITY")
+        os.remove(file_path)
+    cnx.commit()
