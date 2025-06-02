@@ -1,0 +1,7 @@
+.vscode
+.pytest_cache
+.gitignore
+Dockerfile
+docker-compose.yml
+.env
+README.md

@@ -1,7 +1,12 @@
-# Packages import
+# Setup order:
+# 1. schema mapping of json file
+# 2. Schema from 1 is used to create tables in the database
+# 3. Data is loaded into new tables
+# 4. Data is checked.
+# 5. Delete staging data and files.
+
 from psycopg import connect
 
-# Modules import
 from src.env import POSTGRES_CONNECTION_STRING
 from src.database_creation import map_schema, database_setup
 from src.data_load import (

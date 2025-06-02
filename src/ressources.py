@@ -141,6 +141,8 @@ def set_type(data_types: list[str]) -> str:
     return "TEXT"
 
 
+# We want snake case for table and column names without
+# "æ", "ø", "å" in our database.
 def sqlify_names(s: str) -> str:
     sql_str = ""
     for i in range(len(s)):

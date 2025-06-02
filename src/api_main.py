@@ -1,8 +1,6 @@
-# Packages
 from fastapi import FastAPI, Query, Header, HTTPException
 from typing import Annotated
 
-# Modules
 from src.type_models import BygningQuery, BygningResponse
 from src.api_sql_queries import get_bygning
 from src.env import API_KEY

@@ -1,4 +1,9 @@
-# Packages import
+# Datapipline: json_file -> upload schema -> api_exposed schema
+# The reason why we don't upload data directly to the api_exposed schema
+# is to have the ability to make an upsert with postgres' builtin
+# "ON CONFLICT DO UPDATE" and hashsums. This is the fastest way to identify
+# new data and update existing rows that have changed.
+
 import hashlib
 import ijson
 import os
@@ -6,8 +11,6 @@ import os
 from psycopg import Connection, connect
 from typing import Any
 
-
-# Modules import
 from src.type_models import DbSchema
 from src.env import POSTGRES_CONNECTION_STRING
 
@@ -17,6 +20,11 @@ GREEN = "\033[32m"  # Green text
 RESET = "\033[0m"  # Reset to default color
 
 
+# For each data object found in the json file, upload data entries in the
+# object to the corresponding table in the postgres database.
+# We are using psycopg's copy method for fastest bulk load from file to db.
+# Setting search path to the upload schema to ensure data is uploaded to
+# the correct schema
 def upload_data(
     saved_schema: dict[str, DbSchema], cnx: Connection[tuple[Any, ...]], file_path: str
 ) -> None:
@@ -36,6 +44,9 @@ def upload_data(
         cnx.commit()
 
 
+# Every table in the api_exposed schema is updated by dynamically creating
+# an query that selects data from the corresponding table in the upload
+# schema and upserting the result se into the api_exposed table.
 def upsert_data(
     saved_schema: dict[str, DbSchema], cnx: Connection[tuple[Any, ...]]
 ) -> None:
@@ -50,19 +61,20 @@ def upsert_data(
             column_types = [
                 saved_schema[t].columns[c].db_type for c in saved_schema[t].columns
             ]
+            # mutable is used to identify if a row has changed
             mutable = "||".join("COALESCE(" + c + ", '')" for c in columns)
             mutable = f"MD5({mutable})::UUID"
             select_columns = ", ".join(
                 "NULLIF(" + c + ", '')::" + tp for c, tp in zip(columns, column_types)
             )
-            query = f"""--sql
-                INSERT INTO api_exposed.{table} 
-                (id, {', '.join(columns)}, mutable) 
+            query = f"""
+                INSERT INTO api_exposed.{table}
+                (id, {', '.join(columns)}, mutable)
                 SELECT {id}, {select_columns}, {mutable}
                 FROM upload.{table}
-                ON CONFLICT (id) 
-                DO 
-                    UPDATE SET 
+                ON CONFLICT (id)
+                DO
+                    UPDATE SET
                         {', '.join([c + ' = EXCLUDED.' + c for c in columns])},
                         mutable = EXCLUDED.mutable,
                         updated_at = NOW()
@@ -74,6 +86,9 @@ def upsert_data(
     cnx.commit()
 
 
+# After upload we check if data matches between the file and the upload schema
+# for each table in the upload schema, by calculating the hashsum of the entire
+# uploaded data.
 def check_upload_and_file_data_match(
     file_path: str, saved_schema: dict[str, DbSchema]
 ) -> None:
@@ -90,7 +105,7 @@ def check_upload_and_file_data_match(
                         )
                     ).encode("utf-8")
                 )
-            query = f"""
+            query = f"""--sql
                 SELECT {', '.join([columns[c].db_column_name for c in columns])}
                 from upload.{saved_schema[t].db_table_name}
                 ORDER BY seq_id
@@ -109,6 +124,8 @@ def check_upload_and_file_data_match(
                 exit()
 
 
+# After upsert we check if data matches between the upload schema and the
+# api_exposed schema, by calculating the hashsum of the entire upserted data.
 def check_upload_and_api_exposed_data_match(
     saved_schema: dict[str, DbSchema], cnx: Connection[tuple[Any, ...]]
 ) -> None:
@@ -128,7 +145,8 @@ def check_upload_and_api_exposed_data_match(
                     from (
                         select 
                             {hash_columns_str}
-                        from api_exposed.{saved_schema[t].db_table_name} b 
+                        from api_exposed.{saved_schema[t].db_table_name} b
+                        where b.updated_at = (select max(updated_at) from api_exposed.{saved_schema[t].db_table_name})
                         order by 
                             b.id_lokal_id, 
                             b.virkning_fra, 
@@ -173,6 +191,9 @@ def check_upload_and_api_exposed_data_match(
                 exit()
 
 
+# We do a cleanup, where each table in the upload schema is truncated.
+# Since this is only a data staging schema, we erase the data to keep a lean db.
+# Also the json file is deleted to save storage.
 def cleanup(cnx: Connection[tuple[Any, ...]], file_path: str) -> None:
     with cnx.cursor() as cur:
         cur.execute(
